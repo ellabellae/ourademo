@@ -10,6 +10,17 @@ The problem it addresses is **orthosomnia**: seeing a low recovery score the mor
 something stressful adds anxiety at the moment you can least use it, and the number
 rarely changes what you can do in the next two hours.
 
+## What it looks like
+
+| Normal day | Inside a stress window |
+|---|---|
+| ![Normal mode — raw Readiness and Sleep scores with trend](docs/normal.webp) | ![Softened view — reframe banner and blurred, tap-to-reveal scores](docs/softened.webp) |
+
+On a normal day you see the raw scores, the day-over-day change, and the 14-day trend.
+Inside a self-set stress window the dashboard leads with an actionable reframe and blurs
+the scores behind a tap-to-reveal — the exact number is always one tap away, and a
+signpost always says the score is softened, not hidden.
+
 ## Design rules (these are the point)
 
 The softening is built to support a healthy relationship with your data, never to
