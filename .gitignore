@@ -1,0 +1,15 @@
+# Real fetched Oura data (personal, never commit)
+data.json
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Local editor/preview config (machine-specific paths)
+.claude/
