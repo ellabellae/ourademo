@@ -110,6 +110,7 @@
   }
   .feel-btn:hover { color: var(--text); }
   .feel-prompt { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+  .feel-prompt[hidden] { display: none; }
   .feel-prompt span { color: var(--muted); }
   .feel-prompt button {
     background: var(--card); color: var(--text); border: 1px solid var(--line);
@@ -212,7 +213,7 @@
   // ---- Data injected at build time (real Oura data or sample fallback) ----
   const OURA_DATA = [{"day": "2026-05-22", "readiness": 81, "sleep": 78}, {"day": "2026-05-23", "readiness": 76, "sleep": 72}, {"day": "2026-05-24", "readiness": 88, "sleep": 84}, {"day": "2026-05-25", "readiness": 69, "sleep": 65}, {"day": "2026-05-26", "readiness": 73, "sleep": 70}, {"day": "2026-05-27", "readiness": 79, "sleep": 81}, {"day": "2026-05-28", "readiness": 84, "sleep": 77}, {"day": "2026-05-29", "readiness": 62, "sleep": 58}, {"day": "2026-05-30", "readiness": 71, "sleep": 74}, {"day": "2026-05-31", "readiness": 77, "sleep": 73}, {"day": "2026-06-01", "readiness": 66, "sleep": 61}, {"day": "2026-06-02", "readiness": 74, "sleep": 70}, {"day": "2026-06-03", "readiness": 82, "sleep": 79}, {"day": "2026-06-04", "readiness": 70, "sleep": 67}];
   const DATA_SOURCE = "sample";
-  const GENERATED_AT = "2026-06-04 15:23";
+  const GENERATED_AT = "2026-06-04 15:28";
 
   // ---- Config: the stress window around a logged event ----
   // today within [event - BEFORE days, event + AFTER days] => softened view.
