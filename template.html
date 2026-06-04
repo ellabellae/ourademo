@@ -103,6 +103,34 @@
   }
   .mode-note { color: var(--muted); font-size: 13px; margin: 10px 0 0; max-width: 56ch; }
 
+  .feel { margin: -14px 0 26px; text-align: center; }
+  .feel-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; padding: 4px 8px;
+  }
+  .feel-btn:hover { color: var(--text); }
+  .feel-prompt { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+  .feel-prompt span { color: var(--muted); }
+  .feel-prompt button {
+    background: var(--card); color: var(--text); border: 1px solid var(--line);
+    border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .feel-prompt button[data-dir="better"]:hover { border-color: var(--good); color: var(--good); }
+  .feel-prompt button[data-dir="worse"]:hover { border-color: var(--warn); color: var(--warn); }
+  .feel-prompt .feel-cancel:hover { color: var(--text); border-color: var(--line); }
+  .feel-ack { color: var(--good); font-size: 13px; }
+
+  .calibration {
+    margin: 18px 0; padding: 14px 16px; border-radius: 12px;
+    background: linear-gradient(135deg, #1f2a24, #1b2420); border: 1px solid #2f4a3c;
+  }
+  .calibration.worse { background: linear-gradient(135deg, #2a2620, #241f1b); border-color: #4a3f2f; }
+  .calibration .tag { font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--good); font-weight: 600; }
+  .calibration.worse .tag { color: var(--warn); }
+  .calibration .msg { margin-top: 6px; font-size: 15px; }
+  .calibration .msg em { font-style: normal; color: var(--good); }
+  .calibration .note { margin-top: 8px; font-size: 13px; color: var(--muted); }
+
   footer { margin-top: 40px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
 </style>
 </head>
@@ -114,6 +142,7 @@
   </header>
 
   <div id="signpost"></div>
+  <div id="calibration"></div>
 
   <section class="cards">
     <div class="card" id="card-readiness">
@@ -129,6 +158,17 @@
       <div class="reveal-hint">tap to reveal</div>
     </div>
   </section>
+
+  <div class="feel" id="feel">
+    <button class="feel-btn" id="feel-open" type="button">This doesn't quite match me</button>
+    <div class="feel-prompt" id="feel-prompt" hidden>
+      <span>Do you feel better or worse than this?</span>
+      <button type="button" data-dir="better">Better</button>
+      <button type="button" data-dir="worse">Worse</button>
+      <button type="button" class="feel-cancel" data-dir="cancel">Cancel</button>
+    </div>
+    <div class="feel-ack" id="feel-ack" hidden></div>
+  </div>
 
   <section>
     <h2>Readiness — last 14 days</h2>
@@ -221,6 +261,22 @@
   // morning undermined by a low score).
   const AUTO_MESSAGE = "Your recovery reads a little lower today. How you actually feel is just as real a signal — start there, and the number is one tap away when you want it.";
 
+  // ---- "This doesn't quite match me": felt-experience log + personal calibration ----
+  // The user logs when the score doesn't match how they feel ("better" or "worse").
+  // Consistent, same-direction divergence nudges their PERSONAL NORMAL RANGE — never
+  // the displayed score. The offset is derived fresh from the last 30 days of logs, so
+  // it is bounded (CAL_MAX) and self-decaying (it shrinks as old logs age out).
+  // NOTE for a real product: this demo learns from the disagreement alone. The honest
+  // version would also gate on what actually happened next (did the "better" mornings
+  // turn out fine, or end in a crash?) so it learns a true baseline, not flattery.
+  const FEEL_KEY = "ourademo.feelLogs";
+  const CAL_WINDOW = 30;       // rolling days considered
+  const CAL_CONSECUTIVE = 5;   // 5 consecutive same-direction days -> trigger
+  const CAL_CUMULATIVE = 10;   // ...or 10 same-direction days in the window
+  const CAL_SHARE = 0.8;       // ...as long as >=80% point the same way
+  const CAL_STEP = 2;          // points of personal-range shift per ~5 logs
+  const CAL_MAX = 8;           // hard cap on how far the personal range can move
+
   // ---- Date helpers (all local-time, date-only) ----
   function isoDate(d) {
     const y = d.getFullYear();
@@ -265,13 +321,84 @@
   }
 
   // ---- Auto-detection: is today a "lower-recovery morning"? ----
-  function autoSoftenToday() {
+  // `offset` comes from personal calibration: <0 widens the normal range DOWN (a low
+  // score is normal for you -> soften less); >0 is the gentler "feels worse" side.
+  function autoSoftenToday(offset) {
+    offset = offset || 0;
     if (!OURA_DATA.length) return false;
     const today = OURA_DATA[OURA_DATA.length - 1];
     if (!today || today.readiness == null) return false;
     const prior = OURA_DATA.slice(0, -1).map(d => d.readiness).filter(v => v != null);
     const baseline = prior.length ? prior.reduce((a, b) => a + b, 0) / prior.length : today.readiness;
-    return today.readiness <= AUTO_FLOOR || today.readiness <= baseline - AUTO_DROP;
+    const floor = AUTO_FLOOR + offset;
+    const drop = Math.max(2, AUTO_DROP - offset);
+    return today.readiness <= floor || today.readiness <= baseline - drop;
+  }
+
+  // ---- Felt-experience log ("This doesn't quite match me") ----
+  function loadFeelLogs() {
+    try {
+      const raw = localStorage.getItem(FEEL_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  function saveFeelLogs(logs) {
+    try { localStorage.setItem(FEEL_KEY, JSON.stringify(logs)); } catch (e) {}
+  }
+  function addFeelLog(today, readiness, direction) {
+    const logs = loadFeelLogs().filter(l => l.date !== isoDate(today)); // one log per day
+    logs.push({ date: isoDate(today), readiness: readiness, direction: direction });
+    saveFeelLogs(logs);
+  }
+
+  // True if there's a run of `need` consecutive calendar days (within the window),
+  // all the given direction.
+  function hasConsecutiveRun(today, logs, dir, need) {
+    const byDate = {};
+    for (const l of logs) byDate[l.date] = l.direction; // last write per day wins
+    let run = 0;
+    for (let i = 0; i < CAL_WINDOW; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      if (byDate[isoDate(d)] === dir) {
+        run++;
+        if (run >= need) return true;
+      } else {
+        run = 0;
+      }
+    }
+    return false;
+  }
+
+  // Derive the personal-range offset from recent logs. Same-direction consistency only:
+  // mixed signals mean a variable person, not a wrong baseline, so we don't move it.
+  // Returns { offset, direction, count, triggered }.
+  function calibrationOffset(today, logs) {
+    const within = (logs || []).filter(l => {
+      const d = daysApart(today, parseISO(l.date));
+      return d >= 0 && d < CAL_WINDOW;
+    });
+    const better = within.filter(l => l.direction === "better").length;
+    const worse = within.filter(l => l.direction === "worse").length;
+    const total = better + worse;
+    if (!total) return { offset: 0, direction: null, count: 0, triggered: false };
+
+    const direction = better >= worse ? "better" : "worse";
+    const dominant = Math.max(better, worse);
+    const share = dominant / total;
+
+    const cumulative = total >= CAL_CUMULATIVE && share >= CAL_SHARE;
+    const consecutive = hasConsecutiveRun(today, within, direction, CAL_CONSECUTIVE);
+    if (!(cumulative || consecutive)) {
+      return { offset: 0, direction: direction, count: dominant, triggered: false };
+    }
+
+    // Gradual + bounded: ~CAL_STEP points per 5 consistent logs, capped at CAL_MAX.
+    const mag = Math.min(CAL_MAX, CAL_STEP * Math.max(1, Math.round(dominant / CAL_CONSECUTIVE)));
+    return { offset: direction === "better" ? -mag : mag, direction: direction, count: dominant, triggered: true };
   }
 
   // Returns the matching event if today falls in any stress window, else null.
@@ -296,6 +423,8 @@
     });
 
     const mode = loadMode();
+    const feelLogs = loadFeelLogs();
+    const cal = calibrationOffset(today, feelLogs);
 
     let events = loadEvents();
     // ?demo seeds an ephemeral event for today so the softened view is visible
@@ -307,11 +436,13 @@
 
     // Two independent triggers, gated by the chosen mode.
     const manualActive = (mode === "both" || mode === "manual") ? activeWindow(today, events) : null;
-    const autoActive = (mode === "both" || mode === "auto") ? autoSoftenToday() : false;
+    const autoActive = (mode === "both" || mode === "auto") ? autoSoftenToday(cal.offset) : false;
     const softened = !!manualActive || autoActive;
 
     renderSignpost(softened, manualActive, autoActive);
-    renderScores(softened);
+    renderCalibration(cal);
+    renderScores(softened, cal);
+    renderFeel();
     renderTrend();
     renderMode(mode);
     renderEvents(today, events);
@@ -352,13 +483,47 @@
     if (note) note.textContent = MODE_NOTES[mode] || "";
   }
 
-  function renderScores(softened) {
-    const [latest, prev] = latestAndPrev();
-    setScore("readiness", latest, prev, softened);
-    setScore("sleep", latest, prev, softened);
+  function renderCalibration(cal) {
+    const el = document.getElementById("calibration");
+    if (!cal || !cal.triggered) { el.className = ""; el.innerHTML = ""; return; }
+    const floor = AUTO_FLOOR + cal.offset;
+    if (cal.direction === "better") {
+      el.className = "calibration";
+      el.innerHTML = `
+        <div class="tag">Your personal range is adapting</div>
+        <div class="msg">You've said this doesn't match you on ${cal.count} recent mornings — mostly that you feel better than your score. Oura has widened your normal range: a readiness near ${floor} now reads as normal <em>for you</em>.</div>
+        <div class="note">The number itself is unchanged — only what counts as “normal” for you. This drifts back on its own if it stops matching.</div>
+      `;
+    } else {
+      el.className = "calibration worse";
+      el.innerHTML = `
+        <div class="tag">Your personal range is adapting</div>
+        <div class="msg">You've said this doesn't match you on ${cal.count} recent mornings — mostly that you feel worse than your score. Oura is being gentler with how it surfaces these days.</div>
+        <div class="note">A lower felt state is worth attention, not just a smaller number — it can help to add a note or talk with someone you trust.</div>
+      `;
+    }
   }
 
-  function setScore(key, latest, prev, softened) {
+  // Felt-experience control state: idle (link) -> prompt (better/worse) -> ack.
+  let feelState = "idle";
+  let feelAckMsg = "";
+  function renderFeel() {
+    const open = document.getElementById("feel-open");
+    const prompt = document.getElementById("feel-prompt");
+    const ack = document.getElementById("feel-ack");
+    open.hidden = feelState !== "idle";
+    prompt.hidden = feelState !== "prompt";
+    ack.hidden = feelState !== "ack";
+    if (feelState === "ack") ack.textContent = feelAckMsg;
+  }
+
+  function renderScores(softened, cal) {
+    const [latest, prev] = latestAndPrev();
+    setScore("readiness", latest, prev, softened, cal);
+    setScore("sleep", latest, prev, softened, null);
+  }
+
+  function setScore(key, latest, prev, softened, cal) {
     const card = document.getElementById("card-" + key);
     const valEl = document.getElementById("val-" + key);
     const deltaEl = document.getElementById("delta-" + key);
@@ -377,6 +542,11 @@
       // Uniform across all score bands — blur every score, never only low ones.
       card.classList.add("softened");
       deltaEl.textContent = "";
+    } else if (cal && cal.triggered && cal.direction === "better" && key === "readiness"
+               && latest[key] >= (AUTO_FLOOR + cal.offset)) {
+      // Personal calibration: this reads as normal for *you*, the number unchanged.
+      deltaEl.textContent = "normal for you";
+      deltaEl.classList.add("up");
     } else if (prev && prev[key] != null) {
       const d = latest[key] - prev[key];
       const arrow = d > 0 ? "▲" : d < 0 ? "▼" : "→";
@@ -476,6 +646,24 @@
   // Mode selector: persist choice and re-render.
   document.getElementById("mode-select").addEventListener("change", (e) => {
     saveMode(e.target.value);
+    render();
+  });
+
+  // "This doesn't quite match me" → open the better/worse prompt.
+  document.getElementById("feel-open").addEventListener("click", () => {
+    feelState = "prompt";
+    renderFeel();
+  });
+  // Log the felt direction (or cancel), then re-render so calibration updates.
+  document.getElementById("feel-prompt").addEventListener("click", (e) => {
+    const dir = e.target.getAttribute("data-dir");
+    if (!dir) return;
+    if (dir === "cancel") { feelState = "idle"; renderFeel(); return; }
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    const [latest] = latestAndPrev();
+    addFeelLog(t, latest ? latest.readiness : null, dir);
+    feelAckMsg = "Noted — your read counts. Oura is learning your baseline.";
+    feelState = "ack";
     render();
   });
 

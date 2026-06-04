@@ -20,12 +20,12 @@ const localStorage = { getItem: () => null, setItem: () => {} };
 eval(
   "var OURA_DATA = [];\n" + slice +
   "\nglobalThis.__cfg = { EVENT_TYPES, STRESS_BEFORE, STRESS_AFTER, AUTO_FLOOR, AUTO_DROP," +
-  " autoSoftenToday, setData: (d) => { OURA_DATA = d; } };"
+  " CAL_MAX, CAL_STEP, autoSoftenToday, setData: (d) => { OURA_DATA = d; } };"
 );
-// `autoSoftenToday` (a function decl) leaks from the non-strict eval into this
-// scope already, so re-binding it via const would collide — use it directly.
-// Only pull the values that don't leak (consts + the object's arrow setter).
-const { EVENT_TYPES, AUTO_FLOOR, AUTO_DROP, setData } = globalThis.__cfg;
+// `autoSoftenToday` and `calibrationOffset` (function decls) leak from the non-strict
+// eval into this scope already, so re-binding them via const would collide — use them
+// directly. Only pull the values that don't leak (consts + the object's arrow setter).
+const { EVENT_TYPES, AUTO_FLOOR, AUTO_DROP, CAL_MAX, CAL_STEP, setData } = globalThis.__cfg;
 
 let pass = 0, fail = 0;
 function check(name, cond) {
@@ -75,6 +75,39 @@ setData(steady(85, null));
 check("auto: missing today readiness -> normal", autoSoftenToday() === false);
 setData(steady(85, 84));
 check("auto: small dip, still decent -> normal", autoSoftenToday() === false);
+
+// personal calibration from "This doesn't quite match me" logs
+const calToday = onDay("2026-06-30");
+const mkLogs = (n, dir) => Array.from({ length: n }, (_, i) => {
+  const d = new Date(calToday); d.setDate(d.getDate() - i);
+  return { date: isoDate(d), readiness: 66, direction: dir };
+});
+
+check("cal: no logs -> not triggered", calibrationOffset(calToday, []).triggered === false);
+
+const c5b = calibrationOffset(calToday, mkLogs(5, "better"));
+check("cal: 5 consecutive better -> triggered", c5b.triggered === true && c5b.direction === "better");
+check("cal: 'better' widens range down (offset < 0)", c5b.offset < 0);
+
+const c5w = calibrationOffset(calToday, mkLogs(5, "worse"));
+check("cal: 5 consecutive worse -> offset > 0", c5w.triggered === true && c5w.offset > 0);
+
+check("cal: 4 consecutive -> not triggered", calibrationOffset(calToday, mkLogs(4, "better")).triggered === false);
+
+// mixed direction, <80% share, no 5-run -> not triggered (variable, not miscalibrated)
+const interleaved = Array.from({ length: 10 }, (_, i) => {
+  const d = new Date(calToday); d.setDate(d.getDate() - i);
+  return { date: isoDate(d), readiness: 66, direction: (i % 2 === 0 ? "better" : "worse") };
+});
+check("cal: mixed <80% and no run -> not triggered", calibrationOffset(calToday, interleaved).triggered === false);
+
+// bounded: lots of consistent logs cap at CAL_MAX
+check("cal: offset capped at CAL_MAX", Math.abs(calibrationOffset(calToday, mkLogs(20, "better")).offset) === CAL_MAX);
+
+// the offset feeds auto-detection: a 'better' baseline spares a borderline morning
+setData(steady(72, 70));
+check("auto+offset: borderline morning softens at offset 0", autoSoftenToday(0) === true);
+check("auto+offset: 'better' calibration spares it", autoSoftenToday(-CAL_MAX) === false);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

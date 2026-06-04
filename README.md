@@ -12,6 +12,10 @@ It softens in two ways, and you choose which:
 - **Manually**, inside a self-set "stress window" around a high-stakes event you log
   (an exam, a presentation).
 
+And when your scores *keep* not matching how you feel, it adapts to your personal baseline
+instead of asking you to trust a number that doesn't fit — so you stay with your data rather
+than walking away from it.
+
 The problem it addresses is **orthosomnia**: seeing a low recovery score the morning of
 something stressful adds anxiety at the moment you can least use it, and the number
 rarely changes what you can do in the next two hours.
@@ -60,6 +64,39 @@ you did. Auto-detection, by definition, correlates with a lower day — that is 
 you opt into. Both scores still blur uniformly, so it never reveals *which* metric is low,
 only that today reads a little lighter.
 
+## When the number doesn't match you
+
+Hiding a number on a hard morning treats the symptom. The deeper problem in the article is
+a number that *overrides* an accurate, good feeling — and the response is to quit the ring
+entirely, losing HRV and sleep along with it. So the dashboard lets your own read count, and
+adapts to it.
+
+Under each morning's scores is a quiet link: **"This doesn't quite match me."** Tap it and
+it asks one thing — **do you feel better or worse than this?** — and logs your answer
+against today's score. Nothing to recall cold: the score is right there to react to.
+
+Consistent, same-direction divergence then **widens your personal normal range**:
+
+- **Trigger:** 5 consecutive days, *or* 10 days in a rolling month, that mostly point the
+  same way (≥80%). Mixed signals mean a variable week, not a wrong baseline — so nothing
+  moves.
+- **What adapts:** your *personal normal range*, not the displayed score. If you keep feeling
+  better than your lows, a readiness that used to flag now reads as "normal for you" and
+  auto-softening eases off. The measured number stays exactly what it was.
+- **Bounded and reversible:** the shift is gradual and capped, and it drifts back on its own
+  as old logs age out — one rough month can't permanently distort your scores.
+- **The "worse" side gets care, not just a smaller number:** consistently feeling worse than
+  a decent score can be a real signal (overtraining, illness, low mood), so that path also
+  nudges you to add a note or reach out — it isn't only a numeric tweak.
+
+This is the retention move: the ring earns trust by adapting to *you*, so you stay in a
+truthful relationship with the data instead of abandoning it.
+
+> **Demo caveat.** This client-side demo learns from the disagreement alone. The honest
+> production version would also check what *actually happened next* (did the "I feel better"
+> mornings turn out fine, or end in a crash?) before moving a baseline — that's what
+> separates learning your true baseline from learning to flatter you.
+
 ## Design rules (these are the point)
 
 The softening is built to support a healthy relationship with your data, never to
@@ -74,6 +111,9 @@ deceive:
 - **Reframe keys off the trigger, never the hidden score.** In a manual window it speaks to
   the event; on an auto-softened morning it speaks to recovery being lower and puts how you
   *feel* ahead of the number. Neither one reads the blurred value.
+- **Your read is data, not a complaint.** When the score doesn't match you, you log it as
+  your own signal — and only *consistent, same-direction* divergence adapts your personal
+  normal range. The measured number is never rewritten.
 
 ## How it works
 
@@ -87,11 +127,15 @@ index.html (in browser), per your chosen mode:
    manual: today within [event − 2 days, event + 1 day]   → softened
    else                                                   → raw scores + 14-day trend
    (softened = reframe + blurred, tap-to-reveal scores)
+
+   "this doesn't match me" logs (better/worse) →
+     5 consecutive, or 10/month, ≥80% one way      → widen personal range
+     (shifts the floor/baseline, capped & decaying — never the score itself)
 ```
 
-Stress events and your mode choice live in the browser's `localStorage` (per-device). The
-window math and auto-detection run client-side against your data, so the view is correct
-whenever you open the file.
+Stress events, your mode choice, and your "this doesn't match me" logs live in the browser's
+`localStorage` (per-device). The window math, auto-detection, and baseline calibration all
+run client-side against your data, so the view is correct whenever you open the file.
 
 ## Run it
 
@@ -115,6 +159,11 @@ Open `index.html`. With the sample data, today's Readiness (70) is a lower-recov
 morning, so in the default **Auto + manual** mode the dashboard opens already softened.
 Switch the mode to **Off** to see the raw scores, add a stress event dated **today** to see
 the manual stress-window reframe, and tap any score to reveal the exact number.
+
+Under the scores, tap **"This doesn't quite match me" → Better** to log your read. Do that
+on several days running (or ~10 in a month) and the dashboard widens your personal normal
+range: a banner appears and the lower morning stops being softened, because it's now normal
+*for you*.
 
 ## Files
 
