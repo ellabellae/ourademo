@@ -15,8 +15,17 @@ const slice = html.slice(start, end);
 // localStorage is referenced by declarations we never call; stub it so eval is safe.
 const localStorage = { getItem: () => null, setItem: () => {} };
 // `const` declarations don't leak out of eval, so re-export the config we assert on.
-eval(slice + "\nglobalThis.__cfg = { EVENT_TYPES, STRESS_BEFORE, STRESS_AFTER };");
-const { EVENT_TYPES } = globalThis.__cfg;
+// `OURA_DATA` lives outside the slice, so declare a mutable one autoSoftenToday()
+// can close over, plus a setter to drive the auto-detection tests.
+eval(
+  "var OURA_DATA = [];\n" + slice +
+  "\nglobalThis.__cfg = { EVENT_TYPES, STRESS_BEFORE, STRESS_AFTER, AUTO_FLOOR, AUTO_DROP," +
+  " autoSoftenToday, setData: (d) => { OURA_DATA = d; } };"
+);
+// `autoSoftenToday` (a function decl) leaks from the non-strict eval into this
+// scope already, so re-binding it via const would collide — use it directly.
+// Only pull the values that don't leak (consts + the object's arrow setter).
+const { EVENT_TYPES, AUTO_FLOOR, AUTO_DROP, setData } = globalThis.__cfg;
 
 let pass = 0, fail = 0;
 function check(name, cond) {
@@ -50,6 +59,22 @@ check("daysApart negative before", daysApart(onDay("2026-06-08"), onDay("2026-06
 // anti-leak: message depends only on event type, never on a score
 check("exam message is type-keyed", EVENT_TYPES.exam.message.length > 0);
 check("unknown type falls back to other", (EVENT_TYPES["nope"] || EVENT_TYPES.other) === EVENT_TYPES.other);
+
+// auto-detection: softens on a "lower-recovery morning"
+const steady = (n, today) => Array.from({ length: 13 }, () => ({ readiness: n, sleep: n }))
+  .concat([{ readiness: today, sleep: today }]);
+setData([]);
+check("auto: no data -> normal", autoSoftenToday() === false);
+setData(steady(85, 85));
+check("auto: high & steady -> normal", autoSoftenToday() === false);
+setData(steady(85, AUTO_FLOOR));
+check("auto: at the floor -> softened", autoSoftenToday() === true);
+setData(steady(90, 90 - AUTO_DROP));
+check("auto: meaningful drop vs baseline -> softened", autoSoftenToday() === true);
+setData(steady(85, null));
+check("auto: missing today readiness -> normal", autoSoftenToday() === false);
+setData(steady(85, 84));
+check("auto: small dip, still decent -> normal", autoSoftenToday() === false);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

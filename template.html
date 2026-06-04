@@ -95,6 +95,14 @@
   }
   .empty { color: var(--muted); font-size: 14px; font-style: italic; }
 
+  .mode { margin-top: 34px; }
+  .mode-row { display: flex; gap: 8px; }
+  .mode select {
+    background: var(--card); color: var(--text); border: 1px solid var(--line);
+    border-radius: 9px; padding: 9px 10px; font: inherit; min-width: 260px;
+  }
+  .mode-note { color: var(--muted); font-size: 13px; margin: 10px 0 0; max-width: 56ch; }
+
   footer { margin-top: 40px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
 </style>
 </head>
@@ -126,6 +134,19 @@
     <h2>Readiness — last 14 days</h2>
     <div class="trend" id="trend"></div>
     <div class="trend-x" id="trend-x"></div>
+  </section>
+
+  <section class="mode">
+    <h2>Softening mode</h2>
+    <div class="mode-row">
+      <select id="mode-select">
+        <option value="both">Auto + manual stress events</option>
+        <option value="auto">Auto only — lower-recovery mornings</option>
+        <option value="manual">Manual stress events only</option>
+        <option value="off">Off — always show raw scores</option>
+      </select>
+    </div>
+    <p class="mode-note" id="mode-note"></p>
   </section>
 
   <section class="events">
@@ -170,6 +191,36 @@
 
   const STORAGE_KEY = "ourademo.stressEvents";
 
+  // ---- Softening mode (how softening is triggered) ----
+  // "both"   → auto-detected lower-recovery mornings + manual stress windows
+  // "auto"   → auto-detected lower-recovery mornings only (reaches you without logging)
+  // "manual" → only inside windows around stress events you log
+  // "off"    → never soften; always show raw scores
+  const MODE_KEY = "ourademo.mode";
+  const VALID_MODES = ["both", "auto", "manual", "off"];
+  const DEFAULT_MODE = "both"; // default-on: the people most helped won't opt in.
+
+  const MODE_NOTES = {
+    both:   "Scores soften automatically on lower-recovery mornings, and during windows around stress events you log below.",
+    auto:   "Scores soften automatically on lower-recovery mornings — no logging needed. This reaches you on the mornings you'd never think to flag.",
+    manual: "Scores soften only inside windows around stress events you log below. Nothing softens on its own.",
+    off:    "Scores are always shown raw, with day-over-day change and the 14-day trend."
+  };
+
+  // Auto-detection: soften when today's readiness is at or below an absolute
+  // floor, or meaningfully below the recent baseline. NOTE the design tension —
+  // unlike a manual stress window (which keys off the EVENT, never the score),
+  // auto-softening is by definition correlated with a lower score. That's the
+  // contract the user knowingly opts into. Both cards still blur uniformly, so it
+  // never leaks WHICH metric is low — only that today reads a little lighter.
+  const AUTO_FLOOR = 70;
+  const AUTO_DROP = 5;
+
+  // Auto-mode reframe keys off the trigger, not a specific event. It privileges
+  // how you feel over the number — the article's exact failure mode (a good
+  // morning undermined by a low score).
+  const AUTO_MESSAGE = "Your recovery reads a little lower today. How you actually feel is just as real a signal — start there, and the number is one tap away when you want it.";
+
   // ---- Date helpers (all local-time, date-only) ----
   function isoDate(d) {
     const y = d.getFullYear();
@@ -200,6 +251,29 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
   }
 
+  // ---- Mode persistence ----
+  function loadMode() {
+    try {
+      const m = localStorage.getItem(MODE_KEY);
+      return VALID_MODES.includes(m) ? m : DEFAULT_MODE;
+    } catch (e) {
+      return DEFAULT_MODE;
+    }
+  }
+  function saveMode(m) {
+    try { localStorage.setItem(MODE_KEY, VALID_MODES.includes(m) ? m : DEFAULT_MODE); } catch (e) {}
+  }
+
+  // ---- Auto-detection: is today a "lower-recovery morning"? ----
+  function autoSoftenToday() {
+    if (!OURA_DATA.length) return false;
+    const today = OURA_DATA[OURA_DATA.length - 1];
+    if (!today || today.readiness == null) return false;
+    const prior = OURA_DATA.slice(0, -1).map(d => d.readiness).filter(v => v != null);
+    const baseline = prior.length ? prior.reduce((a, b) => a + b, 0) / prior.length : today.readiness;
+    return today.readiness <= AUTO_FLOOR || today.readiness <= baseline - AUTO_DROP;
+  }
+
   // Returns the matching event if today falls in any stress window, else null.
   function activeWindow(today, events) {
     for (const ev of events) {
@@ -221,6 +295,8 @@
       weekday: "long", month: "long", day: "numeric"
     });
 
+    const mode = loadMode();
+
     let events = loadEvents();
     // ?demo seeds an ephemeral event for today so the softened view is visible
     // immediately, without persisting anything to the visitor's localStorage.
@@ -228,12 +304,16 @@
     if (demoMode) {
       events = events.concat([{ id: "demo", date: isoDate(today), type: "exam", demo: true }]);
     }
-    const active = activeWindow(today, events);
-    const softened = !!active;
 
-    renderSignpost(softened, active);
+    // Two independent triggers, gated by the chosen mode.
+    const manualActive = (mode === "both" || mode === "manual") ? activeWindow(today, events) : null;
+    const autoActive = (mode === "both" || mode === "auto") ? autoSoftenToday() : false;
+    const softened = !!manualActive || autoActive;
+
+    renderSignpost(softened, manualActive, autoActive);
     renderScores(softened);
     renderTrend();
+    renderMode(mode);
     renderEvents(today, events);
     renderFooter();
   }
@@ -245,15 +325,31 @@
     return [latest, prev];
   }
 
-  function renderSignpost(softened, active) {
+  function renderSignpost(softened, manualActive, autoActive) {
     const el = document.getElementById("signpost");
     if (!softened) { el.innerHTML = ""; return; }
-    const type = EVENT_TYPES[active.type] || EVENT_TYPES.other;
-    el.innerHTML = `
-      <div class="tag">Stress-window view</div>
-      <div class="msg">${type.message}</div>
-      <div class="note">Your scores are softened, not hidden — tap any score to see the exact number.</div>
-    `;
+    // Manual stress windows take precedence: the event reframe is more specific.
+    if (manualActive) {
+      const type = EVENT_TYPES[manualActive.type] || EVENT_TYPES.other;
+      el.innerHTML = `
+        <div class="tag">Stress-window view</div>
+        <div class="msg">${type.message}</div>
+        <div class="note">Your scores are softened, not hidden — tap any score to see the exact number.</div>
+      `;
+    } else {
+      el.innerHTML = `
+        <div class="tag">Lower-recovery morning</div>
+        <div class="msg">${AUTO_MESSAGE}</div>
+        <div class="note">Your scores are softened, not hidden — tap any score to see the exact number.</div>
+      `;
+    }
+  }
+
+  function renderMode(mode) {
+    const sel = document.getElementById("mode-select");
+    if (sel) sel.value = mode;
+    const note = document.getElementById("mode-note");
+    if (note) note.textContent = MODE_NOTES[mode] || "";
   }
 
   function renderScores(softened) {
@@ -374,6 +470,12 @@
     saveEvents(events);
     document.getElementById("add-form").reset();
     setDefaultDate();
+    render();
+  });
+
+  // Mode selector: persist choice and re-render.
+  document.getElementById("mode-select").addEventListener("change", (e) => {
+    saveMode(e.target.value);
     render();
   });
 
