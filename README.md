@@ -32,7 +32,7 @@ built to catch. *(Story paraphrased from the USA TODAY article linked above.)*
 
 | Normal day | Inside a stress window |
 |---|---|
-| ![Normal mode — raw Readiness and Sleep scores with trend](docs/normal.webp) | ![Softened view — reframe banner and blurred, tap-to-reveal scores](docs/softened.webp) |
+| ![Normal mode — raw Readiness and Sleep scores with trend](docs/normal.webp) | ![Softened / stress-window view — reframe, blurred tap-to-reveal scores, the mode selector, and the "this doesn't quite match me" link](docs/stress-window.png) |
 
 On a normal day you see the raw scores, the day-over-day change, and the 14-day trend.
 When softening is active — automatically on a lower-recovery morning, or inside a self-set
@@ -74,6 +74,10 @@ adapts to it.
 Under each morning's scores is a quiet link: **"This doesn't quite match me."** Tap it and
 it asks one thing — **do you feel better or worse than this?** — and logs your answer
 against today's score. Nothing to recall cold: the score is right there to react to.
+
+| 1 · the quiet link | 2 · better or worse? | 3 · logged, no debate |
+|---|---|---|
+| ![Revealed scores with a "This doesn't quite match me" link beneath them](docs/feel-link.png) | ![The link expands into a "Do you feel better or worse than this?" prompt with Better, Worse, and Cancel buttons](docs/feel-prompt.png) | ![Confirmation reading "Noted — your read counts. Oura is learning your baseline."](docs/feel-ack.png) |
 
 Consistent, same-direction divergence then **widens your personal normal range**:
 
