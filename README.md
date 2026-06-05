@@ -165,6 +165,13 @@ on several days running (or ~10 in a month) and the dashboard widens your person
 range: a banner appears and the lower morning stops being softened, because it's now normal
 *for you*.
 
+Three one-click views (nothing is persisted by the `?` links):
+
+- `index.html` — auto-softened lower-recovery morning (sample default)
+- `index.html?demo` — manual stress-window reframe
+- `index.html?seed` — the **calibrated** "normal for you" state, after a week of "feels
+  better" logs (so the personal-range adaptation is visible without waiting days)
+
 ## Files
 
 | File | Purpose |

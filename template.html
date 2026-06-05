@@ -424,7 +424,19 @@
     });
 
     const mode = loadMode();
-    const feelLogs = loadFeelLogs();
+
+    // ?seed previews the CALIBRATED state — a week of "feels better" logs, NOT
+    // persisted — so the personal-range adaptation is visible in a single click
+    // (it otherwise takes several days of real logging to appear).
+    const seedMode = /(?:[?&])seed(?:=|&|$)/.test(location.search);
+    let feelLogs = loadFeelLogs();
+    if (seedMode) {
+      for (let i = 0; i < 8; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        feelLogs = feelLogs.concat([{ date: isoDate(d), readiness: 68, direction: "better", demo: true }]);
+      }
+    }
     const cal = calibrationOffset(today, feelLogs);
 
     let events = loadEvents();
