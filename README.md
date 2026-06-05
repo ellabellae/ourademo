@@ -1,5 +1,10 @@
 # Stress-aware recovery dashboard
 
+**Live demo** ([no install](https://ellabellae.github.io/ourademo/)):
+[**calibrated "normal for you"**](https://ellabellae.github.io/ourademo/?seed) ·
+[stress-window view](https://ellabellae.github.io/ourademo/?demo) ·
+[auto-softened morning](https://ellabellae.github.io/ourademo/)
+
 A personal Oura dashboard that softens how Readiness and Sleep are presented on the
 mornings a raw recovery number is most likely to do harm. Instead of leading with the
 score, it leads with a supportive, actionable reframe and blurs the number behind a
