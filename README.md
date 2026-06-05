@@ -93,6 +93,11 @@ Consistent, same-direction divergence then **widens your personal normal range**
   a decent score can be a real signal (overtraining, illness, low mood), so that path also
   nudges you to add a note or reach out — it isn't only a numeric tweak.
 
+After enough consistent reads, the dashboard shows the adaptation directly — the measured
+score is unchanged, but it now reads as *normal for you* (this is the `?seed` view):
+
+![Calibrated view — a green "Your personal range is adapting" banner noting the normal range widened after 8 "feel better" mornings, with Readiness 70 now labeled "normal for you"](docs/insight.png)
+
 This is the retention move: the ring earns trust by adapting to *you*, so you stay in a
 truthful relationship with the data instead of abandoning it.
 
